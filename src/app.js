@@ -1,53 +1,92 @@
 import express, { json } from "express";
 import cors from "cors";
+import { MongoClient, ObjectId } from "mongodb";
+import dotenv from "dotenv";
+import joi from "joi";
 
 
 const PORT = 5000;
 const app = express();
+
+dotenv.config();
+
+const mongoClient = new MongoClient(process.env.DATABASE_URL);
+try {
+    await mongoClient.connect();
+} catch (err) {
+    console.log(err.message);
+}
+const db = mongoClient.db();
 
 app.use(express());
 app.use(cors());
 app.use(json());
 
 
-app.post("/participants", (req, res) => {
+app.post("/participants", async (req, res) => {
     const { name } = req.body;
 
-    // validations
+    // validations with joi lib
+    const schemaName = joi.object({
+        name: joi.string().required()
+    })
+    const validation = schemaName.validate(req.body, { abortEarly: false });
 
-    // save in mongo
-
-    res.sendStatus(201);
+    try {
+        await db.collection("participants").insertOne({ name, lastStatus: Date.now() });
+        await db.collection("messages").insertOne({
+            from: name,
+            to: 'Todos',
+            text: 'entra na sala...',
+            type: 'status',
+            time: 'HH:mm:ss' // utilizar dayjs aqui
+        });
+        res.sendStatus(201);
+    } catch (err) {
+        console.log(err.message);
+        res.sendStatus(500);
+    }
 });
 
-app.get("/participants", (req, res) => {
-    console.log("test");
+app.get("/participants", async (req, res) => {
+    try {
+        res.send(await db.collection("participants").find().toArray());
+    } catch (err) {
+        console.log(err.message);
+        res.status(500);
+    }
 });
 
-app.post("/messages", (req, res) => {
+app.post("/messages", async (req, res) => {
     const { to, text, type } = req.body;
     const from = req.headers.User;
 
-    // validations
+    // validations with joi lib and MongoDB functions
 
-    // save in mongo
-
-    res.sendStatus(201);
+    try {
+        const time = 0; // dayjs
+        await db.collection("messages").insertOne({ from, to, text, type, time });
+        res.sendStatus(201);
+    } catch (err) {
+        console.log(err.message);
+        res.sendStatus(500);
+    }
 });
 
-app.get("/messages", (req, res) => {
+app.get("/messages", async (req, res) => {
     const limit = parseInt(req.query.limit);
-    if (!limit || limit < 1) return res.sendStatus(422);
-    
+    // if (!limit) 
+    if (limit < 1) return res.sendStatus(422);
+
     const { User } = req.headers;
 
-    // get messages
+    const messages = await db.collection("messages").find().toArray()
+        .filter()   // messages filter logic
+        .filter()   // limit filter
+        .filter()   // to, from and "Todos" filter
+        .filter(() => console.log());   // // send messages filter data
 
-    // messages filter logic
-    // limit filter
-    // to, from and "Todos" filter
 
-    // send messages filter data
 });
 
 app.post("/status", (req, res) => {
