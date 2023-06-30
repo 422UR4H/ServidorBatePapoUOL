@@ -5,6 +5,8 @@ import dotenv from "dotenv";
 import joi from "joi";
 
 
+// SETTINGS
+
 const PORT = 5000;
 const app = express();
 
@@ -23,14 +25,24 @@ app.use(cors());
 app.use(json());
 
 
+// ENDPOINTS
+
 app.post("/participants", async (req, res) => {
     const { name } = req.body;
 
-    // validations with joi lib
-    const schemaName = joi.object({
+    const nameSchema = joi.object({
         name: joi.string().required()
-    })
-    const validation = schemaName.validate(req.body, { abortEarly: false });
+    });
+    const validation = nameSchema.validate(req.body, { abortEarly: false });
+
+    if (validation.error) {
+        const errorMessages = validation.error.details.map(detail => detail.message);
+        return res.status(422).send(errorMessages);
+    }
+
+    if (await db.collection("participants").findOne({ name })) { // se der errado, usar name: name
+        return res.status(409).send("Nome de usuário já utilizado. Tente outro!");
+    }
 
     try {
         await db.collection("participants").insertOne({ name, lastStatus: Date.now() });
@@ -61,7 +73,22 @@ app.post("/messages", async (req, res) => {
     const { to, text, type } = req.body;
     const from = req.headers.User;
 
-    // validations with joi lib and MongoDB functions
+    if (!(await db.collection("participants").findOne({ name: from }))) {
+        return res.status(422).send("Participante não conectado!");
+    }
+
+    const messageSchema = joi.object({
+        from: joi.string().required(),
+        to: joi.string().required(),
+        text: joi.string().required(),
+        type: joi.string().required().allow("message", "private_message")
+    });
+    const validation = messageSchema.validate(req.body, { abortEarly: false });
+
+    if (validation.error) {
+        const errorMessages = validation.error.details.map(detail => detail.message);
+        return res.status(422).send(errorMessages);
+    }
 
     try {
         const time = 0; // dayjs
@@ -74,28 +101,31 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-    const limit = parseInt(req.query.limit);
-    // if (!limit) 
-    if (limit < 1) return res.sendStatus(422);
+    let { limit } = req.query;
+
+    if (limit) {
+        limit = parseInt(limit);
+        if (!limit || limit < 1) return res.sendStatus(422);
+    } // talvez colocar um else com um novo valor pra ele
 
     const { User } = req.headers;
 
+    // pesquisar sobre $or do mmongodb
     const messages = await db.collection("messages").find().toArray()
         .filter()   // messages filter logic
         .filter()   // limit filter
         .filter()   // to, from and "Todos" filter
         .filter(() => console.log());   // // send messages filter data
 
-
 });
 
-app.post("/status", (req, res) => {
-    const { User } = req.headers;
-    if (!User) return res.sendStatus(404);
+app.post("/status", async (req, res) => {
+    const name = req.headers.User;
+    if (!name) return res.sendStatus(404);
 
-    // User validation => if (!participantsList.some(participant => participant.? === User)) return sendStatus(404);
+    if (!(await db.collection("participants").findOne({ name }))) return res.sendStatus(404);
 
-    // update lastStatus of User using Date.now()
+    // update lastStatus of User using Date.now() with db.put
 
     res.sendStatus(200);
 });
