@@ -39,7 +39,7 @@ app.use(json());
 
 app.post("/participants", async (req, res) => {
     const nameSchema = joi.object({
-        name: joi.string().required().stripHTML()
+        name: joi.string().required().stripHTML().trim()
     });
     const { error, value } = nameSchema.validate(req.body, { abortEarly: false });
 
@@ -87,9 +87,9 @@ app.post("/messages", async (req, res) => {
     }
 
     const messageSchema = joi.object({
-        to: joi.string().stripHTML().required(),
-        text: joi.string().stripHTML().required(),
-        type: joi.string().stripHTML().required().allow("message", "private_message")
+        to: joi.string().stripHTML().trim().required(),
+        text: joi.string().stripHTML().trim().required(),
+        type: joi.string().stripHTML().trim().required().allow("message", "private_message")
     });
     const { error, value } = messageSchema.validate(req.body, { abortEarly: false });
 
