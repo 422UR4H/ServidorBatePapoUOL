@@ -4,7 +4,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import dayjs from "dayjs";
 import joi from "joi";
-import { stripHTML } from "string-strip-html";
+import { stripHtml } from "string-strip-html";
 // import filterInactiveParticipants from "./filterInactiveParticipants.js";
 
 
@@ -39,7 +39,7 @@ app.use(json());
 
 app.post("/participants", async (req, res) => {
     const nameSchema = joi.object({
-        name: joi.string().required().stripHTML().trim()
+        name: joi.string().required().stripHtml().trim()
     });
     const { error, value } = nameSchema.validate(req.body, { abortEarly: false });
 
@@ -87,9 +87,9 @@ app.post("/messages", async (req, res) => {
     }
 
     const messageSchema = joi.object({
-        to: joi.string().stripHTML().trim().required(),
-        text: joi.string().stripHTML().trim().required(),
-        type: joi.string().stripHTML().trim().required().allow("message", "private_message")
+        to: joi.string().stripHtml().trim().required(),
+        text: joi.string().stripHtml().trim().required(),
+        type: joi.string().stripHtml().trim().required().allow("message", "private_message")
     });
     const { error, value } = messageSchema.validate(req.body, { abortEarly: false });
 
@@ -110,7 +110,7 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-    let limit = stripHTML(req.query.limit);
+    let limit = stripHtml(req.query.limit);
 
     if (limit) {
         limit = parseInt(limit);
