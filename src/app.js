@@ -3,7 +3,7 @@ import cors from "cors";
 import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import dayjs from "dayjs";
-import joi from "joi";
+import joi from "@hapi/joi";
 import { stripHtml } from "string-strip-html";
 // import filterInactiveParticipants from "./filterInactiveParticipants.js";
 
@@ -39,7 +39,7 @@ app.use(json());
 
 app.post("/participants", async (req, res) => {
     const nameSchema = joi.object({
-        name: joi.string().required().stripHtml().trim()
+        name: joi.string().required().custom(value => stripHtml(value)).trim()
     });
     const { error, value } = nameSchema.validate(req.body, { abortEarly: false });
 
@@ -47,7 +47,7 @@ app.post("/participants", async (req, res) => {
         const errorMessages = error.details.map(detail => detail.message);
         return res.status(422).send(errorMessages);
     }
-    const { name } = value;
+    const name = value.name.result;
 
     try {
         if (await db.collection("participants").findOne({ name })) {
@@ -87,9 +87,9 @@ app.post("/messages", async (req, res) => {
     }
 
     const messageSchema = joi.object({
-        to: joi.string().stripHtml().trim().required(),
-        text: joi.string().stripHtml().trim().required(),
-        type: joi.string().stripHtml().trim().required().allow("message", "private_message")
+        to: joi.string().custom(value => stripHtml(value)).trim().required(),
+        text: joi.string().custom(value => stripHtml(value)).trim().required(),
+        type: joi.string().custom(value => stripHtml(value)).trim().required().allow("message", "private_message")
     });
     const { error, value } = messageSchema.validate(req.body, { abortEarly: false });
 
@@ -97,7 +97,9 @@ app.post("/messages", async (req, res) => {
         const errorMessages = error.details.map(detail => detail.message);
         return res.status(422).send(errorMessages);
     }
-    const { to, text, type } = value;
+    const to = value.to.result;
+    const text = value.text.result;
+    const { type } = value;
 
     try {
         const time = dayjs().locale("pt-br").format("HH:mm:ss");
@@ -110,25 +112,28 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-    let limit = stripHtml(req.query.limit);
+    // let limit = stripHtml(req.query.limit) || null;
+    let limit = req.query.limit;
 
     if (limit) {
         limit = parseInt(limit);
         if (!limit || limit < 1) return res.sendStatus(422);
+    } else {
+        limit = 0;
     }
-
     const user = req.headers.user;
-    const messages = await db.collection("messages").find({
-        $or: [
-            { to: { $in: ["Todos", user] } },
-            { type: "message" },
-            { from: user }
-        ]
-    }).toArray();
-    console.log(messages)
 
-    // limit filter with slice (remember to use: -limit || -messages.length)
-    res.send(messages);
+    try {
+        res.send(await db.collection("messages").find({
+            $or: [
+                { to: { $in: ["Todos", user] } },
+                { type: "message" },
+                { from: user }
+            ]
+        }).sort({ _id: -1 }).limit(limit).toArray());
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
 });
 
 app.post("/status", async (req, res) => {
