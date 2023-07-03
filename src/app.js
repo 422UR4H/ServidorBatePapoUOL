@@ -3,7 +3,7 @@ import cors from "cors";
 import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import dayjs from "dayjs";
-import joi from "@hapi/joi";
+import Joi from "@hapi/joi";
 import { stripHtml } from "string-strip-html";
 // import filterInactiveParticipants from "./filterInactiveParticipants.js";
 
@@ -33,13 +33,42 @@ app.use(json());
 //     console.error("THE FILTER INACTIVE PARTICIPANTS IS NOT STARTED")
 //     console.log(err.message);
 // }
+const MS_INTERVAL = 15 * 1000;
+const MS_STATUS = 10 * 1000;
+const intervalID = setInterval(async () => {
+    try {
+        const MS_DIFF = Date.now() - MS_STATUS;
+
+        const participants = await db.collection("participants").find(
+            { lastStatus: { $lt: MS_DIFF } }
+        ).toArray();
+
+        await db.collection("participants").deleteMany(
+            { lastStatus: { $lt: MS_DIFF } }
+        );
+
+        if (participants.length > 0) {
+            await db.collection("messages").insertMany(participants.map((p) => {
+                return {
+                    from: p.name,
+                    to: "Todos",
+                    text: "sai da sala...",
+                    type: "status",
+                    time: dayjs().locale("pt-br").format("HH:mm:ss")
+                }
+            }));
+        }
+    } catch (err) {
+        console.log(err.message);
+    }
+}, MS_INTERVAL);
 
 
 // ENDPOINTS
 
 app.post("/participants", async (req, res) => {
-    const nameSchema = joi.object({
-        name: joi.string().required().custom(value => stripHtml(value)).trim()
+    const nameSchema = Joi.object({
+        name: Joi.string().required().custom(value => stripHtml(value)).trim()
     });
     const { error, value } = nameSchema.validate(req.body, { abortEarly: false });
 
@@ -55,19 +84,18 @@ app.post("/participants", async (req, res) => {
         }
 
         await db.collection("participants").insertOne({ name, lastStatus: Date.now() });
-        console.log(Date.now());
-        console.log(dayjs().locale("pt-br"));
-        await db.collection("messages").insertOne({
-            from: name,
-            to: "Todos",
-            text: "entra na sala...",
-            type: "status",
-            time: dayjs().locale("pt-br").format("HH:mm:ss")
-        });
+        await db.collection("messages").insertOne(
+            {
+                from: name,
+                to: "Todos",
+                text: "entra na sala...",
+                type: "status",
+                time: dayjs().locale("pt-br").format("HH:mm:ss")
+            }
+        );
         res.sendStatus(201);
     } catch (err) {
-        console.log(err.message);
-        res.sendStatus(500);
+        res.status(500).send(err.message);
     }
 });
 
@@ -75,21 +103,15 @@ app.get("/participants", async (req, res) => {
     try {
         res.send(await db.collection("participants").find().toArray());
     } catch (err) {
-        console.log(err.message);
-        res.status(500);
+        res.status(500).send(err.message);
     }
 });
 
 app.post("/messages", async (req, res) => {
-    const from = req.headers.user;
-    if (!(await db.collection("participants").findOne({ name: from }))) {
-        return res.status(422).send("Participante não conectado!");
-    }
-
-    const messageSchema = joi.object({
-        to: joi.string().custom(value => stripHtml(value)).trim().required(),
-        text: joi.string().custom(value => stripHtml(value)).trim().required(),
-        type: joi.string().custom(value => stripHtml(value)).trim().required().allow("message", "private_message")
+    const messageSchema = Joi.object({
+        to: Joi.string().custom(value => stripHtml(value)).trim().required(),
+        text: Joi.string().custom(value => stripHtml(value)).trim().required(),
+        type: Joi.string().custom(value => stripHtml(value)).trim().required().valid("message", "private_message")
     });
     const { error, value } = messageSchema.validate(req.body, { abortEarly: false });
 
@@ -100,8 +122,12 @@ app.post("/messages", async (req, res) => {
     const to = value.to.result;
     const text = value.text.result;
     const { type } = value;
+    const from = req.headers.user;
 
     try {
+        if (!(await db.collection("participants").findOne({ name: from }))) {
+            return res.status(422).send("Participante não conectado!");
+        }
         const time = dayjs().locale("pt-br").format("HH:mm:ss");
         await db.collection("messages").insertOne({ from, to, text, type, time });
         res.sendStatus(201);
