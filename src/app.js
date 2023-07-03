@@ -157,21 +157,24 @@ app.delete("/messages/:id", async (req, res) => {
     }
 });
 
-app.put("messages/:id", async (req, res) => {
+app.put("/messages/:id", async (req, res) => {
     const messageSchema = Joi.object({
         to: Joi.string().custom(value => stripHtml(value)).trim().required(),
         text: Joi.string().custom(value => stripHtml(value)).trim().required(),
         type: Joi.string().custom(value => stripHtml(value)).required().valid("private_message", "message")
     });
     const { error, value } = messageSchema.validate(req.body, { abortEarly: false });
+    console.log("foi");
 
     if (error) return res.status(422).send(error.details.map(detail => detail.message));
 
     const to = value.to.result;
-    const text = value.to.result;
+    const text = value.text.result;
     const { type } = value;
     const { id } = req.params;
     const from = req.headers.user;
+
+    console.log("foi tb");
 
     try {
         if (!(await db.collection("participants").findOne({ name: from }))) {
