@@ -154,10 +154,15 @@ app.delete("/messages/:id", async (req, res) => {
         if (name !== message.from) return res.sendStatus(401);
         
         await db.collection("messages").deleteOne({ _id: ObjectId(id) });
+        res.sendStatus(200);
     } catch (err) {
         res.status(500).send(err.message);
     }
-})
+});
+
+app.put("messages/:id", async (req, res) => {
+    
+});
 
 
 app.listen(PORT, () => console.log(`server is running on port ${PORT}`));
