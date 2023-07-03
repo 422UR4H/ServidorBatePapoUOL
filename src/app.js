@@ -149,11 +149,11 @@ app.delete("/messages/:id", async (req, res) => {
     const id = stripHtml(req.params.id).result;
 
     try {
-        const message = await db.collection("messages").findOne({ _id: ObjectId(id) });
+        const message = await db.collection("messages").findOne({ _id: new ObjectId(id) });
         if (!message) return res.sendStatus(404);
         if (name !== message.from) return res.sendStatus(401);
         
-        await db.collection("messages").deleteOne({ _id: ObjectId(id) });
+        await db.collection("messages").deleteOne({ _id: new ObjectId(id) });
         res.sendStatus(200);
     } catch (err) {
         res.status(500).send(err.message);
