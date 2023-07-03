@@ -21,7 +21,7 @@ export default async function filterInactiveParticipants(db) {
                     text: "sai da sala...",
                     type: "status",
                     time: dayjs().locale("pt-br").format("HH:mm:ss")
-                }
+                };
             }));
         }
     } catch (err) {

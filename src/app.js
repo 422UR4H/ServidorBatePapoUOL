@@ -190,7 +190,7 @@ app.put("/messages/:id", async (req, res) => {
             { _id: new ObjectId(id) },
             { $set: { from, to, text, type, time } }
         );
-        res.sendStatus(201);
+        res.sendStatus(200);
     } catch (err) {
         res.status(500).send(err.message);
     }
