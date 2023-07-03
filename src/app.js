@@ -1,6 +1,6 @@
 import express, { json } from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import dayjs from "dayjs";
 import Joi from "@hapi/joi";
@@ -143,6 +143,21 @@ app.post("/status", async (req, res) => {
         res.status(500).send(err.message);
     }
 });
+
+app.delete("/messages/:id", async (req, res) => {
+    const name = req.headers.user;
+    const id = stripHtml(req.params.id).result;
+
+    try {
+        const message = await db.collection("messages").findOne({ _id: ObjectId(id) });
+        if (!message) return res.sendStatus(404);
+        if (name !== message.from) return res.sendStatus(401);
+        
+        await db.collection("messages").deleteOne({ _id: ObjectId(id) });
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+})
 
 
 app.listen(PORT, () => console.log(`server is running on port ${PORT}`));
