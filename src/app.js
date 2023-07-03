@@ -1,17 +1,21 @@
 import express, { json } from "express";
 import cors from "cors";
-import { MongoClient, ObjectId } from "mongodb";
+import { MongoClient } from "mongodb";
 import dotenv from "dotenv";
 import dayjs from "dayjs";
 import Joi from "@hapi/joi";
 import { stripHtml } from "string-strip-html";
-// import filterInactiveParticipants from "./filterInactiveParticipants.js";
+import { PORT, MS_INTERVAL } from "./constants.js";
+import filterInactiveParticipants from "./filterInactiveParticipants.js";
 
 
 // SETTINGS
 
-const PORT = 5000;
 const app = express();
+
+app.use(express());
+app.use(cors());
+app.use(json());
 
 dotenv.config();
 
@@ -23,45 +27,7 @@ try {
 }
 const db = mongoClient.db();
 
-app.use(express());
-app.use(cors());
-app.use(json());
-
-// try {
-//     filterInactiveParticipants();
-// } catch (err) {
-//     console.error("THE FILTER INACTIVE PARTICIPANTS IS NOT STARTED")
-//     console.log(err.message);
-// }
-const MS_INTERVAL = 15 * 1000;
-const MS_STATUS = 10 * 1000;
-const intervalID = setInterval(async () => {
-    try {
-        const MS_DIFF = Date.now() - MS_STATUS;
-
-        const participants = await db.collection("participants").find(
-            { lastStatus: { $lt: MS_DIFF } }
-        ).toArray();
-
-        await db.collection("participants").deleteMany(
-            { lastStatus: { $lt: MS_DIFF } }
-        );
-
-        if (participants.length > 0) {
-            await db.collection("messages").insertMany(participants.map((p) => {
-                return {
-                    from: p.name,
-                    to: "Todos",
-                    text: "sai da sala...",
-                    type: "status",
-                    time: dayjs().locale("pt-br").format("HH:mm:ss")
-                }
-            }));
-        }
-    } catch (err) {
-        console.log(err.message);
-    }
-}, MS_INTERVAL);
+setInterval(filterInactiveParticipants, MS_INTERVAL, db);
 
 
 // ENDPOINTS
@@ -138,11 +104,10 @@ app.post("/messages", async (req, res) => {
 });
 
 app.get("/messages", async (req, res) => {
-    // let limit = stripHtml(req.query.limit) || null;
     let limit = req.query.limit;
 
     if (limit) {
-        limit = parseInt(limit);
+        limit = parseInt(stripHtml(limit).result);
         if (!limit || limit < 1) return res.sendStatus(422);
     } else {
         limit = 0;
