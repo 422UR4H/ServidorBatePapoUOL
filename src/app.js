@@ -29,11 +29,13 @@ setInterval(filterInactiveParticipants, MS_INTERVAL, db);
 
 
 // SCHEMAS
+
 const participantSchema = Joi.object({
     name: Joi.string().required().custom(value => stripHtml(value)).trim()
 });
 const messageSchema = Joi.object({
     to: Joi.string().custom(value => stripHtml(value)).trim().required(),
+    from: Joi.string().custom(value => stripHtml(value)).trim().required(),
     text: Joi.string().custom(value => stripHtml(value)).trim().required(),
     type: Joi.string().custom(value => stripHtml(value)).required().valid("message", "private_message")
 });
@@ -81,21 +83,21 @@ app.get("/participants", async (req, res) => {
 });
 
 app.post("/messages", async (req, res) => {
-    const from = req.headers.user;
-    const { error, value } = messageSchema.validate({ ...req.body, from }, { abortEarly: false });
-
+    const { error, value } = messageSchema.validate(
+        { ...req.body, from: req.headers.user },
+        { abortEarly: false }
+    );
     if (error) return res.status(422).send(error.details.map(detail => detail.message));
 
-    const to = value.to.result;
-    const text = value.text.result;
-    const { type } = value;
+    const from = value.from.result;
+    const message = { from, to: value.to.result, text: value.text.result, type: value.type };
 
     try {
         if (!(await db.collection("participants").findOne({ name: from }))) {
             return res.status(422).send("Participante não conectado!");
         }
         const time = dayjs().locale("pt-br").format("HH:mm:ss");
-        await db.collection("messages").insertOne({ from, to, text, type, time });
+        await db.collection("messages").insertOne({ ...message, time });
         res.sendStatus(201);
     } catch (err) {
         res.status(500).send(err.message);
@@ -109,7 +111,7 @@ app.get("/messages", async (req, res) => {
         limit = parseInt(stripHtml(limit).result);
         if (!limit || limit < 1) return res.sendStatus(422);
     }
-    const from = req.headers.user;
+    const from = stripHtml(req.headers.user).result;
 
     try {
         res.send(await db
@@ -156,15 +158,15 @@ app.delete("/messages/:id", async (req, res) => {
 });
 
 app.put("/messages/:id", async (req, res) => {
-    const from = req.headers.user;
-    const { error, value } = messageSchema.validate({ ...req.body, from }, { abortEarly: false });
-
+    const { error, value } = messageSchema.validate(
+        { ...req.body, from: req.headers.user },
+        { abortEarly: false }
+    );
     if (error) return res.status(422).send(error.details.map(detail => detail.message));
 
-    const to = value.to.result;
-    const text = value.text.result;
-    const { type } = value;
     const { id } = req.params;
+    const from = value.from.result;
+    const newMessage = { from, to: value.to.result, text: value.text.result, type: value.type };
 
     try {
         if (!(await db.collection("participants").findOne({ name: from }))) {
@@ -175,10 +177,9 @@ app.put("/messages/:id", async (req, res) => {
         if (!message) return res.sendStatus(404);
         if (message.from !== from) return res.sendStatus(401);
 
-        const time = dayjs().locale("pt-br").format("HH:mm:ss");
         await db.collection("messages").updateOne(
             { _id: new ObjectId(id) },
-            { $set: { from, to, text, type, time } }
+            { $set: { ...newMessage, time: dayjs().locale("pt-br").format("HH:mm:ss") } }
         );
         res.sendStatus(200);
     } catch (err) {
